@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.DS_Store
+THM-002.tex
+Takehome.pdf
+instructions.pdf
+
+# Company-provided assessment materials and outputs (kept locally, not published)
+taxonomy.md
+tickets_train.jsonl
+tickets_eval.jsonl
+predictions.jsonl
+WRITEUP.md
+.claude/
