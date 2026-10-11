@@ -12,9 +12,11 @@ from triage import (
     CATEGORIES,
     NO_DRAFT_CATEGORIES,
     OUTPUT_SCHEMA,
+    ROUTING_CONFIDENCE_THRESHOLD,
     URGENCY_LEVELS,
     _safety_override,
     load_jsonl,
+    route,
 )
 
 
@@ -154,3 +156,36 @@ def test_predictions_field_consistency():
         else:
             assert p["draft_response"] is None, f"{p['ticket_id']}: should_draft=False but has draft"
             assert p["no_draft_reason"] is not None
+
+
+# ── Routing ───────────────────────────────────────────────────────────────────
+
+def _pred(category="account_access", urgency="low", should_draft=True, confidence=0.9):
+    return {"category": category, "urgency": urgency, "should_draft": should_draft, "confidence": confidence}
+
+
+def test_confident_draft_is_auto_drafted():
+    assert route(_pred()) == "auto_draft"
+
+
+def test_confident_no_draft_goes_to_agent_queue():
+    assert route(_pred(should_draft=False)) == "agent_queue"
+
+
+def test_low_confidence_goes_to_human_triage_even_with_a_draft():
+    assert route(_pred(confidence=0.5)) == "human_triage"
+
+
+def test_threshold_is_inclusive_at_point_seven():
+    assert route(_pred(confidence=ROUTING_CONFIDENCE_THRESHOLD)) == "auto_draft"
+    assert route(_pred(confidence=ROUTING_CONFIDENCE_THRESHOLD - 0.01)) == "human_triage"
+
+
+@pytest.mark.parametrize("category", sorted(NO_DRAFT_CATEGORIES))
+def test_sensitive_categories_escalate_at_any_confidence(category):
+    for confidence in (0.1, 0.5, 0.99):
+        assert route(_pred(category=category, should_draft=False, confidence=confidence)) == "escalate"
+
+
+def test_escalate_immediately_urgency_escalates_even_when_unsure():
+    assert route(_pred(urgency="escalate_immediately", confidence=0.2)) == "escalate"

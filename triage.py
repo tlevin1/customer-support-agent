@@ -173,6 +173,30 @@ def _safety_override(prediction: dict) -> dict:
     return prediction
 
 
+# ── Routing ───────────────────────────────────────────────────────────────────
+
+ROUTING_CONFIDENCE_THRESHOLD = 0.7
+ROUTES = ("escalate", "human_triage", "auto_draft", "agent_queue")
+
+
+def route(prediction: dict, threshold: float = ROUTING_CONFIDENCE_THRESHOLD) -> str:
+    """Where a ticket goes next. Low confidence can only move a ticket toward
+    human review, never away from escalation:
+
+    - escalate: sensitive category or escalate_immediately, at any confidence
+      (over-escalating is recoverable; missing a distress signal isn't)
+    - human_triage: anything else the model is unsure about; a draft, if any,
+      is shown as a suggestion rather than queued for sending
+    - auto_draft: confident, and the model wrote a reply
+    - agent_queue: confident, no reply drafted
+    """
+    if prediction["category"] in NO_DRAFT_CATEGORIES or prediction["urgency"] == "escalate_immediately":
+        return "escalate"
+    if prediction["confidence"] < threshold:
+        return "human_triage"
+    return "auto_draft" if prediction["should_draft"] else "agent_queue"
+
+
 # ── Core classifier ───────────────────────────────────────────────────────────
 
 def classify_ticket(
