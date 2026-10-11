@@ -1,5 +1,7 @@
 # Support Ticket Triage Agent
 
+[![tests](https://github.com/tlevin1/customer-support-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/tlevin1/customer-support-agent/actions/workflows/tests.yml)
+
 An LLM triage system for the support queue of a regulated prediction-market
 exchange. For each ticket it assigns a category and an urgency level, decides
 whether an auto-drafted reply is safe, and writes the draft when it is.
