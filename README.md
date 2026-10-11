@@ -43,6 +43,18 @@ ticket ──► Claude Haiku 4.5 (one structured-output call)
 - **Confidence covers all three decisions together**, so a high-confidence
   no-draft on a compromise ticket tells an ops queue "this is obviously a
   compromise, not borderline."
+- **Every prediction gets a route** (`route()` in `triage.py`):
+
+  | Prediction | Route |
+  |---|---|
+  | Sensitive category, or `escalate_immediately` | `escalate`, at any confidence |
+  | Anything else with confidence < 0.7 | `human_triage`: a draft is only a suggestion |
+  | Confident, reply drafted | `auto_draft` |
+  | Confident, no reply | `agent_queue` |
+
+  Low confidence can only move a ticket *toward* human review, never away from
+  escalation: an unsure "maybe problem gambling" still escalates, because
+  over-escalating is recoverable and missing a distress signal isn't.
 
 ## Prompt design
 
@@ -94,8 +106,11 @@ a wrong automated answer would create liability.
    generalization estimate.
 2. A second call that scores each draft against the drafting guidelines before
    an agent sees it, closing the policy-invention gap without a full knowledge base.
-3. Route low-confidence predictions (< 0.7) to a lightweight human triage queue:
-   a third path that reduces both failure modes at once.
+3. ~~Route low-confidence predictions (< 0.7) to a lightweight human triage
+   queue.~~ Done: see the routing table above. The eval now also reports
+   sensitive tickets that were not routed to escalation, which catches the
+   failure the safety backstop can't: a sensitive ticket misclassified into a
+   safe category.
 
 ## Running it
 
@@ -103,7 +118,7 @@ a wrong automated answer would create liability.
 make install
 export ANTHROPIC_API_KEY=...
 make eval    # runs the labeled set (metrics) and the held-out set (predictions.jsonl)
-make test    # unit tests: safety backstop, schema, prediction consistency
+make test    # unit tests: safety backstop, routing, schema, eval metrics
 ```
 
 The ticket dataset and category taxonomy were provided by the company as part
