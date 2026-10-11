@@ -17,6 +17,8 @@ from pathlib import Path
 import anthropic
 
 from triage import (
+    NO_DRAFT_CATEGORIES,
+    ROUTES,
     URGENCY_LEVELS,
     build_system_prompt,
     classify_ticket,
@@ -35,6 +37,8 @@ def compute_metrics(predictions: list[dict], train_tickets: list[dict]) -> dict:
 
     total = cat_correct = urg_correct = draft_correct = 0
     sensitive_total = sensitive_false_drafts = 0
+    routes: dict[str, int] = defaultdict(int)
+    must_escalate = not_escalated = 0
 
     # confusion[actual][predicted] = count
     confusion: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -56,6 +60,13 @@ def compute_metrics(predictions: list[dict], train_tickets: list[dict]) -> dict:
 
         confusion[label["urgency"]][pred["urgency"]] += 1
 
+        routes[pred["route"]] += 1
+        # Gold says this ticket must reach a human urgently: was it escalated?
+        if label["category"] in NO_DRAFT_CATEGORIES or label["urgency"] == "escalate_immediately":
+            must_escalate += 1
+            if pred["route"] != "escalate":
+                not_escalated += 1
+
         # false-draft: gold says NO, model says YES
         if not label["should_draft"]:
             sensitive_total += 1
@@ -73,6 +84,9 @@ def compute_metrics(predictions: list[dict], train_tickets: list[dict]) -> dict:
         "false_draft_count": sensitive_false_drafts,
         "false_draft_rate": sensitive_false_drafts / sensitive_total if sensitive_total else 0.0,
         "wrong_drafts": wrong_drafts,
+        "routes": dict(routes),
+        "must_escalate": must_escalate,
+        "not_escalated": not_escalated,
     }
 
 
@@ -106,6 +120,11 @@ def print_report(metrics: dict) -> None:
         for tid, label, pred in metrics["wrong_drafts"]:
             print(f"    {tid}: expected NO-DRAFT ({label['no_draft_reason']})")
             print(f"           got DRAFT  cat={pred['category']} urg={pred['urgency']}")
+
+    ne, me = metrics["not_escalated"], metrics["must_escalate"]
+    flag = "  ⚠️  CRITICAL FAILURES" if ne else "  ✅ CLEAN"
+    print(f"  ★ Sensitive tickets not routed to escalation: {ne}/{me}{flag}")
+    print("\n  Routes: " + ", ".join(f"{r}={metrics['routes'].get(r, 0)}" for r in ROUTES))
 
     matrix = metrics["confusion_matrix"]
     col_w = 22
@@ -148,7 +167,7 @@ def main() -> None:
         print(
             f"  [{i:02d}/{len(eval_tickets)}] {ticket['ticket_id']}: "
             f"cat={pred['category']}  urg={pred['urgency']}  "
-            f"{decision}  conf={pred['confidence']:.2f}"
+            f"{decision}  conf={pred['confidence']:.2f}  -> {pred['route']}"
         )
 
     Path(PREDICTIONS_FILE).write_text(

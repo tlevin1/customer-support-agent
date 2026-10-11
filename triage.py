@@ -241,5 +241,6 @@ def classify_ticket(
         prediction["no_draft_reason"] = None
 
     prediction = _safety_override(prediction)
+    prediction["route"] = route(prediction)
 
     return prediction

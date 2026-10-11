@@ -189,3 +189,20 @@ def test_sensitive_categories_escalate_at_any_confidence(category):
 
 def test_escalate_immediately_urgency_escalates_even_when_unsure():
     assert route(_pred(urgency="escalate_immediately", confidence=0.2)) == "escalate"
+
+
+def test_eval_counts_sensitive_tickets_that_were_not_escalated():
+    from eval import compute_metrics
+
+    gold = [
+        {"ticket_id": "a", "label": {"category": "problem_gambling", "urgency": "escalate_immediately", "should_draft": False}},
+        {"ticket_id": "b", "label": {"category": "account_access", "urgency": "low", "should_draft": True}},
+    ]
+    preds = [
+        # Misclassified into a safe category: escalation missed, and it counts.
+        {"ticket_id": "a", "category": "account_access", "urgency": "low", "should_draft": False, "route": "agent_queue"},
+        {"ticket_id": "b", "category": "account_access", "urgency": "low", "should_draft": True, "route": "auto_draft"},
+    ]
+    m = compute_metrics(preds, gold)
+    assert (m["must_escalate"], m["not_escalated"]) == (1, 1)
+    assert m["routes"] == {"agent_queue": 1, "auto_draft": 1}
